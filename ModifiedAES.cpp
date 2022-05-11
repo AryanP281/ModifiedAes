@@ -1,4 +1,3 @@
-
 #include<bits/stdc++.h>
 
 using namespace std;
@@ -491,37 +490,3 @@ void invMixCol(uint8_t* col)
         col[i] = mixedCol[i];
     }
 }
-
-/*
-srand(time(NULL));
-    uint8_t* pt = new uint8_t[16];
-    cout << "Original Data: \n";
-    for(int i = 0; i < 16; ++i)
-    {
-        pt[i] = rand() % 255;
-        cout << hex << (int)pt[i];
-        cout << ' ';
-    }
-
-    modifiedAes(pt, baseKeys);
-    cout << "\n\nEncrypted Data: \n";
-    for(int i = 0; i < 16; ++i)
-    {
-        cout << hex << (int)pt[i];
-        cout << ' ';
-    }
-
-    uint8_t* ct = new uint8_t[16];
-    for(int i = 0; i < 16; ++i)
-    {
-        ct[i] = pt[i];
-    }
-
-    modifiedAesDecryption(ct,baseKeys);
-    cout << "\n\nDecrypted Data: \n";
-    for(int i = 0; i < 16; ++i)
-    {
-        cout << hex << (int)ct[i];
-        cout << ' ';
-    }
-*/
