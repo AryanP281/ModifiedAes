@@ -13,6 +13,7 @@ void shiftRows(uint8_t* pt, vector<uint32_t>& keys);
 void mixColumns(uint8_t* pt);
 void mixCol(uint8_t* col);
 void addRoundKey(uint8_t* pt, uint8_t* keyBlocks);
+void rowPermutation(uint8_t* pt, uint8_t* key, uint8_t* prevCt);
 
 void modifiedAesDecryption(uint8_t* ct, uint32_t* baseKey, uint8_t* prevCt);
 void invShiftRows(uint8_t* ct, vector<uint32_t>& keys);
@@ -171,10 +172,6 @@ void modifiedAes(uint8_t* pt, uint32_t* baseKey, uint8_t* prevCt)
 {
     //Generating Keys
     vector<uint32_t> keys = keyGeneration(baseKey);
-    for(int i = 0; i < 16; ++i)
-    {
-        pt[i] ^= prevCt[i];
-    }
     
     //Generating 8-bit key blocks
     uint8_t* keyBlocks = new uint8_t[16];
@@ -198,6 +195,7 @@ void modifiedAes(uint8_t* pt, uint32_t* baseKey, uint8_t* prevCt)
             keyBlocks[k] = (keys[j] >> (8*(k % 4))) & 0xFF;
         }
         addRoundKey(pt, keyBlocks);
+        rowPermutation(pt, keyBlocks, prevCt);
     }
 
     delete[] keyBlocks;
@@ -339,6 +337,16 @@ void addRoundKey(uint8_t* pt, uint8_t* keyBlocks)
     for(int i = 0; i < 16; ++i)
     {
         pt[i] ^= keyBlocks[i];
+    }
+}
+
+void rowPermut(uint8_t* pt, uint8_t* key, uint8_t* prevCt)
+{
+    int j = 0;
+    for(int i = 0; i < 4; ++i)
+    {
+        uint8_t mask = key[j] ^ prevCt[j];
+        uint8_t permutationIndex = mask & 0b11;
     }
 }
 
@@ -540,37 +548,3 @@ void invMixCol(uint8_t* col)
         col[i] = mixedCol[i];
     }
 }
-
-/*
-srand(time(NULL));
-    uint8_t* pt = new uint8_t[16];
-    cout << "Original Data: \n";
-    for(int i = 0; i < 16; ++i)
-    {
-        pt[i] = rand() % 255;
-        cout << hex << (int)pt[i];
-        cout << ' ';
-    }
-
-    modifiedAes(pt, baseKeys);
-    cout << "\n\nEncrypted Data: \n";
-    for(int i = 0; i < 16; ++i)
-    {
-        cout << hex << (int)pt[i];
-        cout << ' ';
-    }
-
-    uint8_t* ct = new uint8_t[16];
-    for(int i = 0; i < 16; ++i)
-    {
-        ct[i] = pt[i];
-    }
-
-    modifiedAesDecryption(ct,baseKeys);
-    cout << "\n\nDecrypted Data: \n";
-    for(int i = 0; i < 16; ++i)
-    {
-        cout << hex << (int)ct[i];
-        cout << ' ';
-    }
-*/

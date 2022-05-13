@@ -31,4 +31,10 @@ def displayOutput(imgName) :
     cv2.waitKey(0)
 
 #generatePixelFile("img.png")
-displayOutput("img.png")
+#displayOutput("img.png")
+
+#generatePixelFile("img2.webp")
+#displayOutput("img2.webp")
+
+#generatePixelFile("img3.jpg")
+displayOutput("img3.jpg")

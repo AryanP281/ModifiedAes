@@ -1,18 +1,24 @@
+
 #include<bits/stdc++.h>
 
 using namespace std;
 
 const int NO_ROUNDS = 10;
 
-vector<uint32_t> keyGeneration(uint32_t* baseKey);
-void modifiedAes(uint8_t* pt, uint32_t* baseKey);
+uint8_t* ivGeneration(uint32_t* iv);
+void modifiedAes(uint8_t* pt, vector<uint32_t>& roundKeys, uint8_t* prevCt);
 void substituteBytes(uint8_t* pt);
 void shiftRows(uint8_t* pt, vector<uint32_t>& keys);
 void mixColumns(uint8_t* pt);
 void mixCol(uint8_t* col);
 void addRoundKey(uint8_t* pt, uint8_t* keyBlocks);
+void rowPermutation(uint8_t* pt, uint8_t* key, uint8_t* prevCt);
+void rowP0(uint8_t* pt, int row);
+void rowP1(uint8_t* pt, int row);
+void rowP2(uint8_t* pt, int row);
+void rowP3(uint8_t* pt, int row);
 
-void modifiedAesDecryption(uint8_t* ct, uint32_t* baseKey);
+void modifiedAesDecryption(uint8_t* ct, vector<uint32_t>& roundKeys, uint8_t* prevCt);
 void invShiftRows(uint8_t* ct, vector<uint32_t>& keys);
 void invSubstituteBytes(uint8_t* ct);
 void invMixColumns(uint8_t* ct);
@@ -20,21 +26,47 @@ void invMixCol(uint8_t* col);
 
 int main()
 {
-    mt19937 randGen;
-    randGen.seed(time(NULL));
-    uint32_t* baseKeys = new uint32_t[4];
-    baseKeys[0] = randGen();
-    baseKeys[1] = randGen();
-    baseKeys[2] = randGen();
-    baseKeys[3] = randGen();
     
-    ifstream file("pixelVals.txt");
+    ifstream keyFile("Keys.txt");
+    while(!keyFile)
+    {
+        this_thread::sleep_for(chrono::milliseconds(1000));
+        keyFile = ifstream("Keys.txt");
+    }
+
     stringstream buffer;
+    buffer << keyFile.rdbuf();
+
+    string keyString = buffer.str();
+    uint32_t* baseKeys = new uint32_t[4];
+    vector<uint32_t> roundKeys(4*(NO_ROUNDS+1), 0);
+    uint32_t* iv = new uint32_t[4];
+    int j = 0;
+    for(int i = 0; i < keyString.size();++i,j++)
+    {
+        string num = "";
+        while(keyString[i] != ' ')
+        {
+            num += keyString[i];
+            i++;
+        }
+
+        if(j < 4)
+            baseKeys[j] = stoi(num);
+        else if(j < 4*(NO_ROUNDS+2))
+            roundKeys[j-4] = stoul(num);
+        else if(j < 4*(NO_ROUNDS+3))
+            iv[j - 4*(NO_ROUNDS+2)] = stoul(num);
+    }
+    keyString.clear();
+    buffer.str(string());
+
+    ifstream file("pixelVals.txt");
     buffer << file.rdbuf();
 
     string pixelString = buffer.str();
     uint8_t* pt = new uint8_t[256*256];
-    int j = 0;
+    j = 0;
     for(int i = 0; i < pixelString.size();++i)
     {
         string num = "";
@@ -48,6 +80,7 @@ int main()
 
     uint8_t* currPt = new uint8_t[16];
     uint8_t* ct = new uint8_t[256*256];
+    uint8_t* prevCt = ivGeneration(iv);
     int k = 0;
     int blocksEncrypted = 0;
     string encryptedString = "";
@@ -58,12 +91,13 @@ int main()
             currPt[j] = pt[i++];
         }
 
-        modifiedAes(currPt, baseKeys);
+        modifiedAes(currPt, roundKeys, prevCt);
         for(int j = 0; j < 16; ++j)
         {
             encryptedString += to_string((int)currPt[j]);
             encryptedString += ' ';
             ct[k++] = currPt[j];
+            prevCt[j] = currPt[j];
         }
 
         blocksEncrypted++;
@@ -71,9 +105,40 @@ int main()
 
     ofstream encryptionFile("encrypted.txt");
     encryptionFile << encryptedString;
-    encryptionFile.close(); 
+    encryptionFile.close();
+
+    keyFile = ifstream("KeysDcryp.txt");
+    while(!keyFile)
+    {
+        this_thread::sleep_for(chrono::milliseconds(1000));
+        keyFile = ifstream("KeysDcryp.txt");
+    }
+    buffer.str(string());
+    buffer << keyFile.rdbuf();
+    keyString = buffer.str();
+    roundKeys.clear();
+
+    j = 0;
+    for(int i = 0; i < keyString.size();++i,j++)
+    {
+        string num = "";
+        while(keyString[i] != ' ')
+        {
+            num += keyString[i];
+            i++;
+        }
+
+        if(j < 4*(NO_ROUNDS+1))
+            roundKeys.push_back(stoul(num));
+        else
+            iv[j - 4*(NO_ROUNDS+1)] = stoul(num);
+    }
+    keyString.clear();
+    buffer.clear();
 
     uint8_t* currCt = new uint8_t[16];
+    prevCt = ivGeneration(iv);
+    uint8_t* currCtCopy = new uint8_t[16];
     int blocksDecrypted = 0;
     string decryptedString = "";
     for(int i = 0; i < 256*256;)
@@ -81,13 +146,15 @@ int main()
         for(int j = 0; j < 16; ++j)
         {
             currCt[j] = ct[i++];
+            currCtCopy[j] = currCt[j];
         }
 
-        modifiedAesDecryption(currCt, baseKeys);
+        modifiedAesDecryption(currCt, roundKeys, prevCt);
         for(int j = 0; j < 16; ++j)
         {
             decryptedString += to_string((int)currCt[j]);
             decryptedString += ' ';
+            prevCt[j] = currCtCopy[j];
         }
 
         blocksDecrypted++;
@@ -103,34 +170,27 @@ int main()
     delete[] pt;
     delete[] ct;
     delete[] currCt;
+    delete[] prevCt;
+    
     getchar();
     return 0;
 }
 
-vector<uint32_t> keyGeneration(uint32_t* baseKey)
+uint8_t* ivGeneration(uint32_t* iv)
 {
-    uint32_t seed = 0;
-    for(int i = 0; i < 4; ++i)
+    uint8_t* ivBlocks = new uint8_t[16];
+    int j = 0;
+    for(int i = 0; i < 16; ++i, j+=1*(i % 4 == 0))
     {
-        seed ^= baseKey[i];
+        ivBlocks[i] = (iv[j] >> (8*(i % 4))) & 0xFF;
     }
 
-    mt19937 randGen;
-    randGen.seed(seed);
-    vector<uint32_t> keys(4*(NO_ROUNDS+1), 0);
-    for(int i = 0; i < keys.size(); ++i)
-    {
-        keys[i] = randGen();
-    }
-
-    return keys;
+    return ivBlocks;
 }
 
-void modifiedAes(uint8_t* pt, uint32_t* baseKey)
+void modifiedAes(uint8_t* pt, vector<uint32_t>& keys, uint8_t* prevCt)
 {
-    //Generating Keys
-    vector<uint32_t> keys = keyGeneration(baseKey);
-    
+
     //Generating 8-bit key blocks
     uint8_t* keyBlocks = new uint8_t[16];
     int j = 0;
@@ -153,6 +213,10 @@ void modifiedAes(uint8_t* pt, uint32_t* baseKey)
             keyBlocks[k] = (keys[j] >> (8*(k % 4))) & 0xFF;
         }
         addRoundKey(pt, keyBlocks);
+
+        if(i != NO_ROUNDS-1)
+            rowPermutation(pt, keyBlocks, prevCt);
+        int l = 0;
     }
 
     delete[] keyBlocks;
@@ -297,11 +361,68 @@ void addRoundKey(uint8_t* pt, uint8_t* keyBlocks)
     }
 }
 
-void modifiedAesDecryption(uint8_t* ct, uint32_t* baseKey)
+void rowPermutation(uint8_t* pt, uint8_t* key, uint8_t* prevCt)
 {
-    //Generating Keys
-    vector<uint32_t> keys = keyGeneration(baseKey);
+    void (*permuts[])(uint8_t*,int)= {&rowP0, &rowP1, &rowP2, &rowP3};
     
+    int j = 0;
+    uint8_t mask;
+    uint8_t permutationIndex;
+    for(int r = 0; r < 4; ++r, j+=4)
+    {
+        mask = key[j] ^ prevCt[j];
+        permutationIndex = mask & 0b11;
+
+        permuts[permutationIndex](pt, r);
+    }
+}
+
+void rowP0(uint8_t* pt, int row)
+{
+    int i = row*4;
+
+    pt[i] ^= pt[i+1];
+    pt[i+1] ^= pt[i];
+    pt[i] ^= pt[i+1];
+
+    pt[i+2] ^= pt[i+3];
+    pt[i+3] ^= pt[i+2];
+    pt[i+2] ^= pt[i+3];
+}
+
+void rowP1(uint8_t* pt, int row)
+{
+    int i = row*4;
+
+    pt[i] ^= pt[i+2];
+    pt[i+2] ^= pt[i];
+    pt[i] ^= pt[i+2];
+
+    pt[i+1] ^= pt[i+3];
+    pt[i+3] ^= pt[i+1];
+    pt[i+1] ^= pt[i+3];
+}
+
+void rowP2(uint8_t* pt, int row)
+{
+    int i = row*4;
+
+    pt[i] ^= pt[i+3];
+    pt[i+3] ^= pt[i];
+    pt[i] ^= pt[i+3];
+
+    pt[i+1] ^= pt[i+2];
+    pt[i+2] ^= pt[i+1];
+    pt[i+1] ^= pt[i+2];
+}
+
+void rowP3(uint8_t* pt, int row)
+{
+    return;
+}
+
+void modifiedAesDecryption(uint8_t* ct, vector<uint32_t>& keys, uint8_t* prevCt)
+{
     //Generating 8-bit key blocks
     uint8_t* keyBlocks = new uint8_t[16];
     int j = keys.size()-4;
@@ -322,6 +443,10 @@ void modifiedAesDecryption(uint8_t* ct, uint32_t* baseKey)
         {
             keyBlocks[k] = (keys[j] >> (8*(k % 4))) & 0xFF;
         }
+
+        if(i != NO_ROUNDS-1)
+            rowPermutation(ct, keyBlocks, prevCt);
+
         addRoundKey(ct, keyBlocks);
         
         if(i != NO_ROUNDS-1)
@@ -490,3 +615,94 @@ void invMixCol(uint8_t* col)
         col[i] = mixedCol[i];
     }
 }
+
+/*mt19937 randGen;
+    randGen.seed(time(NULL));
+    uint32_t* baseKeys = new uint32_t[4];
+    baseKeys[0] = randGen();
+    baseKeys[1] = randGen();
+    baseKeys[2] = randGen();
+    baseKeys[3] = randGen();
+    
+    ifstream file("pixelVals.txt");
+    stringstream buffer;
+    buffer << file.rdbuf();
+
+    string pixelString = buffer.str();
+    uint8_t* pt = new uint8_t[256*256];
+    int j = 0;
+    for(int i = 0; i < pixelString.size();++i)
+    {
+        string num = "";
+        while(pixelString[i] != ' ')
+        {
+            num += pixelString[i];
+            i++;
+        }
+        pt[j++] = stoi(num);
+    }
+
+    uint8_t* currPt = new uint8_t[16];
+    uint8_t* ct = new uint8_t[256*256];
+    uint8_t* prevCt = ivGeneration(baseKeys);
+    int k = 0;
+    int blocksEncrypted = 0;
+    string encryptedString = "";
+    for(int i = 0; i < 256*256;)
+    {
+        for(int j = 0; j < 16; ++j)
+        {
+            currPt[j] = pt[i++];
+        }
+
+        modifiedAes(currPt, baseKeys, prevCt);
+        for(int j = 0; j < 16; ++j)
+        {
+            encryptedString += to_string((int)currPt[j]);
+            encryptedString += ' ';
+            ct[k++] = currPt[j];
+            prevCt[j] = currPt[j];
+        }
+
+        blocksEncrypted++;
+    }
+
+    ofstream encryptionFile("encrypted.txt");
+    encryptionFile << encryptedString;
+    encryptionFile.close(); 
+
+    uint8_t* currCt = new uint8_t[16];
+    prevCt = ivGeneration(baseKeys);
+    uint8_t* currCtCopy = new uint8_t[16];
+    int blocksDecrypted = 0;
+    string decryptedString = "";
+    for(int i = 0; i < 256*256;)
+    {
+        for(int j = 0; j < 16; ++j)
+        {
+            currCt[j] = ct[i++];
+            currCtCopy[j] = currCt[j];
+        }
+
+        modifiedAesDecryption(currCt, baseKeys, prevCt);
+        for(int j = 0; j < 16; ++j)
+        {
+            decryptedString += to_string((int)currCt[j]);
+            decryptedString += ' ';
+            prevCt[j] = currCtCopy[j];
+        }
+
+        blocksDecrypted++;
+    }
+
+    ofstream decryptionFile("decrypted.txt");
+    decryptionFile << decryptedString;
+    decryptionFile.close(); 
+
+    cout << "Image encrypted";
+
+    delete[] currPt;
+    delete[] pt;
+    delete[] ct;
+    delete[] currCt;
+    delete[] prevCt;*/
