@@ -37,4 +37,7 @@ def displayOutput(imgName) :
 #displayOutput("img2.webp")
 
 #generatePixelFile("img3.jpg")
-displayOutput("img3.jpg")
+#displayOutput("img3.jpg")
+
+#generatePixelFile("img4.png")
+displayOutput("img4.png")

@@ -26,13 +26,14 @@ void invMixCol(uint8_t* col);
 
 int main()
 {
-    
     ifstream keyFile("Keys.txt");
+    cout << "Generating Encryption Keys\n";
     while(!keyFile)
     {
         this_thread::sleep_for(chrono::milliseconds(1000));
         keyFile = ifstream("Keys.txt");
     }
+    cout << "Encryption Keys Generated\n";
 
     stringstream buffer;
     buffer << keyFile.rdbuf();
@@ -61,6 +62,7 @@ int main()
     keyString.clear();
     buffer.str(string());
 
+    cout << "Reading Image\n";
     ifstream file("pixelVals.txt");
     buffer << file.rdbuf();
 
@@ -78,6 +80,7 @@ int main()
         pt[j++] = stoi(num);
     }
 
+    cout << "Encrypting image\n";
     uint8_t* currPt = new uint8_t[16];
     uint8_t* ct = new uint8_t[256*256];
     uint8_t* prevCt = ivGeneration(iv);
@@ -106,7 +109,9 @@ int main()
     ofstream encryptionFile("encrypted.txt");
     encryptionFile << encryptedString;
     encryptionFile.close();
+    cout << "Image Encryption Completed\n";
 
+    cout << "Generating Decryption Keys\n";
     keyFile = ifstream("KeysDcryp.txt");
     while(!keyFile)
     {
@@ -134,8 +139,10 @@ int main()
             iv[j - 4*(NO_ROUNDS+1)] = stoul(num);
     }
     keyString.clear();
-    buffer.clear();
+    buffer.str(string());
+    cout << "Decryption Keys Generated\n";
 
+    cout << "Decrypting Image\n";
     uint8_t* currCt = new uint8_t[16];
     prevCt = ivGeneration(iv);
     uint8_t* currCtCopy = new uint8_t[16];
@@ -164,7 +171,7 @@ int main()
     decryptionFile << decryptedString;
     decryptionFile.close(); 
 
-    cout << "Image encrypted";
+    cout << "Image Decryption Completed\n";
 
     delete[] currPt;
     delete[] pt;
@@ -190,6 +197,11 @@ uint8_t* ivGeneration(uint32_t* iv)
 
 void modifiedAes(uint8_t* pt, vector<uint32_t>& keys, uint8_t* prevCt)
 {
+    //CBC XOR
+    for(int i = 0; i < 16; ++i)
+    {
+        pt[i] ^= prevCt[i];
+    }
 
     //Generating 8-bit key blocks
     uint8_t* keyBlocks = new uint8_t[16];
@@ -451,6 +463,12 @@ void modifiedAesDecryption(uint8_t* ct, vector<uint32_t>& keys, uint8_t* prevCt)
         
         if(i != NO_ROUNDS-1)
             invMixColumns(ct);
+    }
+
+    //CBC Reversal
+    for(int i = 0; i < 16; ++i)
+    {
+        ct[i] ^= prevCt[i];
     }
 
     delete[] keyBlocks;
